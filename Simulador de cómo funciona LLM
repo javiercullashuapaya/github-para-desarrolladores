@@ -1,0 +1,168 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyO3Kd3dMbdgBapzKN2cSLGA",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/javiercullashuapaya/github-para-desarrolladores/blob/master/Simulador%20de%20c%C3%B3mo%20funciona%20LLM\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Nglqd1rZCOFL",
+        "outputId": "b73f6f39-6ce0-49bc-965e-a20e057ecc20"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prompt: ¿Dónde está Perú?\n",
+            "Entidad detectada: Perú\n",
+            "\n",
+            "Paso 1 | Contexto: <inicio>\n",
+            "  - Perú          logit= 3.2  prob= 0.746  ██████████████████████\n",
+            "  - Está          logit= 2.2  prob= 0.179  █████\n",
+            "  - Se            logit= 1.6  prob= 0.076  ██\n",
+            "→ Elegido: Perú\n",
+            "\n",
+            "Paso 2 | Contexto: Perú\n",
+            "  - está          logit= 4.2  prob= 0.946  ████████████████████████████\n",
+            "  - es            logit= 2.2  prob= 0.054  █\n",
+            "→ Elegido: está\n",
+            "\n",
+            "Paso 3 | Contexto: Perú está\n",
+            "  - en            logit= 5.0  prob= 0.946  ████████████████████████████\n",
+            "  - ubicado       logit= 3.0  prob= 0.054  █\n",
+            "→ Elegido: en\n",
+            "\n",
+            "Paso 4 | Contexto: Perú está en\n",
+            "  - América       logit= 3.8  prob= 0.623  ██████████████████\n",
+            "  - Sudamérica    logit= 3.2  prob= 0.264  ███████\n",
+            "  - Latinoamérica  logit= 2.6  prob= 0.112  ███\n",
+            "→ Elegido: América\n",
+            "\n",
+            "Paso 5 | Contexto: Perú está en América\n",
+            "  - del           logit= 4.5  prob= 0.973  █████████████████████████████\n",
+            "  - Latina        logit= 2.0  prob= 0.027  \n",
+            "→ Elegido: del\n",
+            "\n",
+            "Paso 6 | Contexto: Perú está en América del\n",
+            "  - Sur           logit= 4.8  prob= 0.996  █████████████████████████████\n",
+            "  - Norte         logit= 1.0  prob= 0.004  \n",
+            "→ Elegido: Sur\n",
+            "\n",
+            "Paso 7 | Contexto: Perú está en América del Sur\n",
+            "  - .             logit= 3.0  prob= 1.000  ██████████████████████████████\n",
+            "→ Elegido: .\n",
+            "\n",
+            "Resultado: Perú está en América del Sur .\n"
+          ]
+        }
+      ],
+      "source": [
+        "from math import exp\n",
+        "import random\n",
+        "\n",
+        "def softmax(logits, temperature=1.0):\n",
+        "    scaled = [l / max(1e-6, temperature) for l in logits]\n",
+        "    m = max(scaled)\n",
+        "    exps = [exp(x - m) for x in scaled]\n",
+        "    s = sum(exps)\n",
+        "    return [e / s for e in exps]\n",
+        "\n",
+        "def detect_entity(prompt):\n",
+        "    p = prompt.strip().strip(\".\").strip()\n",
+        "    if p.endswith(\"?\"):\n",
+        "        p = p[:-1].strip()\n",
+        "    parts = p.split()\n",
+        "    if not parts:\n",
+        "        return \"X\"\n",
+        "    stop = {\"está\", \"esta\", \"es\", \"donde\", \"dónde\", \"¿\"}\n",
+        "    for tok in reversed(parts):\n",
+        "        t = tok.strip(\"¿?\").lower()\n",
+        "        if t not in stop:\n",
+        "            return tok.strip(\"¿?\")\n",
+        "    return parts[-1].strip(\"¿?\")\n",
+        "\n",
+        "def next_candidates_where(context, entity):\n",
+        "    ctx = context.strip().lower()\n",
+        "    if ctx == \"\":\n",
+        "        return [(\"Perú\" if entity.lower()==\"perú\" else entity, 3.2),\n",
+        "                (\"Está\", 2.2),\n",
+        "                (\"Se\", 1.6)]\n",
+        "    if ctx.endswith(entity.lower()):\n",
+        "        return [(\"está\", 4.2), (\"es\", 2.2)]\n",
+        "    if ctx.endswith(f\"{entity.lower()} está\"):\n",
+        "        return [(\"en\", 5.0), (\"ubicado\", 3.0)]\n",
+        "    if ctx.endswith(f\"{entity.lower()} está en\"):\n",
+        "        return [(\"América\", 3.8), (\"Sudamérica\", 3.2), (\"Latinoamérica\", 2.6)]\n",
+        "    if ctx.endswith(\"américa\"):\n",
+        "        return [(\"del\", 4.5), (\"Latina\", 2.0)]\n",
+        "    if ctx.endswith(\"del\"):\n",
+        "        return [(\"Sur\", 4.8), (\"Norte\", 1.0)]\n",
+        "    return [(\".\", 3.0)]\n",
+        "\n",
+        "def simulate_where(prompt, temperature=0.7, greedy=True):\n",
+        "    entity = detect_entity(prompt)\n",
+        "    generated = []\n",
+        "    step = 1\n",
+        "    print(f\"Prompt: {prompt}\")\n",
+        "    print(f\"Entidad detectada: {entity}\")\n",
+        "    while True:\n",
+        "        cands = next_candidates_where(\" \".join([t.lower() for t in generated]), entity)\n",
+        "        logits = [l for _,l in cands]\n",
+        "        probs = softmax(logits, temperature=temperature)\n",
+        "        print(f\"\\nPaso {step} | Contexto: {' '.join(generated) if generated else '<inicio>'}\")\n",
+        "        for (tok, logit), p in zip(cands, probs):\n",
+        "            bar = '█' * int(p * 30)\n",
+        "            print(f\"  - {tok:<12}  logit={logit:>4.1f}  prob={p:>6.3f}  {bar}\")\n",
+        "        # elegir token\n",
+        "        if greedy:\n",
+        "            idx = max(range(len(probs)), key=lambda i: probs[i])\n",
+        "        else:\n",
+        "            r, acc = random.random(), 0.0\n",
+        "            idx = 0\n",
+        "            for i,p in enumerate(probs):\n",
+        "                acc += p\n",
+        "                if r <= acc:\n",
+        "                    idx = i; break\n",
+        "        chosen = cands[idx][0]\n",
+        "        print(f\"→ Elegido: {chosen}\")\n",
+        "        generated.append(chosen)\n",
+        "        if chosen == '.' or step > 12:\n",
+        "            break\n",
+        "        step += 1\n",
+        "    print(\"\\nResultado:\", \" \".join(generated))\n",
+        "\n",
+        "# Ejecuta la simulación\n",
+        "simulate_where(\"¿Dónde está Perú?\", temperature=0.7, greedy=True)\n",
+        "\n"
+      ]
+    }
+  ]
+}
